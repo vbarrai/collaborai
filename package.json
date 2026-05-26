@@ -1,0 +1,20 @@
+{
+  "name": "collaborai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "brain": "node --env-file=.env --import tsx src/brain/index.ts",
+    "daemon": "node --env-file=.env --import tsx src/daemon/index.ts"
+  },
+  "dependencies": {
+    "@slack/bolt": "^4.4.0",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.14",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

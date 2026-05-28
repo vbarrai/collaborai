@@ -94,7 +94,7 @@ function connect() {
   })
 
   ws.on("error", (err) => {
-    console.error("[daemon] ws error:", err.message)
+    console.error("[daemon] ws error:", err.message || err)
   })
 }
 

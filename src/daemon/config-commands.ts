@@ -12,7 +12,13 @@ interface DaemonConfig {
 
 function load(): DaemonConfig {
   if (!existsSync(CONFIG_PATH)) return { projects: [], autoAccept: { channels: {} } }
-  try { return JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) } catch { return { projects: [], autoAccept: { channels: {} } } }
+  try {
+    const parsed = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"))
+    return {
+      projects: parsed.projects ?? [],
+      autoAccept: parsed.autoAccept ?? { channels: {} },
+    }
+  } catch { return { projects: [], autoAccept: { channels: {} } } }
 }
 
 function save(config: DaemonConfig) {
@@ -76,6 +82,17 @@ export function handleDaemonConfigCmd(args: string[]): string {
     save(config)
     const display = userId === "*" ? "tous" : `<@${userId}>`
     return `:white_check_mark: Auto-accept : ${display} dans <#${channelId}>.`
+  }
+
+  if (sub === "unaccept") {
+    const [channelRaw] = rest
+    const channelId = channelRaw?.replace(/[<#>|]/g, "").split("|")[0]
+    if (!channelId) return ":x: Usage : `config @you unaccept <channelId>`"
+    const config = load()
+    if (!config.autoAccept.channels[channelId]) return `:x: Aucune règle pour <#${channelId}>.`
+    delete config.autoAccept.channels[channelId]
+    save(config)
+    return `:white_check_mark: Auto-accept supprimé pour <#${channelId}>.`
   }
 
   if (sub === "deny") {

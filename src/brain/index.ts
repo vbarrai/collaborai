@@ -7,6 +7,8 @@ import { startWsServer, dispatchTask, requestProjects, shouldAutoAccept, sendDae
 import { listAll, onRegistryChange } from "./registry.js"
 import { initStatus, refreshStatus } from "./status.js"
 import { handleConfigCommand } from "./config-commands.js"
+import { registerHomeHandlers } from "./home-tab.js"
+import { openDaemonModal, registerDaemonModalHandlers } from "./daemon-modal.js"
 import type { Project, AutoAcceptRules } from "../protocol.js"
 
 const CONFIG_PATH = process.env.BRAIN_CONFIG ?? join(homedir(), ".collaborai", "brain.config.json")
@@ -60,6 +62,18 @@ async function updateMessage(channel: string, ts: string, text: string): Promise
 }
 
 startWsServer(Number(process.env.WS_PORT ?? 8080), postMessage, updateMessage)
+
+const onBrainConfigChange = () => {
+  if (existsSync(CONFIG_PATH)) {
+    Object.assign(brainConfig, JSON.parse(readFileSync(CONFIG_PATH, "utf-8")))
+  }
+}
+
+registerHomeHandlers(app, onBrainConfigChange, (triggerId, userId, client) =>
+  openDaemonModal(client, triggerId, userId, requestProjects)
+)
+
+registerDaemonModalHandlers(app, requestProjects, sendDaemonConfigCmd)
 
 const allowedChannels = Object.keys(brainConfig.channels)
 
@@ -132,7 +146,7 @@ async function handleMention(text: string, channel: string, ts: string, requeste
   if (clean.toLowerCase().startsWith("config")) {
     const rest = clean.slice(6).trim()
     const mentionRegex = /<@(U[A-Z0-9]+)>/g
-    const mentioned = [...rest.matchAll(mentionRegex)].map((m) => m[1])
+    const mentioned = [...text.matchAll(mentionRegex)].map((m) => m[1]).filter((id) => id !== botUserId)
     const connectedUsers = listAll()
     const daemonTarget = mentioned.find((u) => connectedUsers.includes(u))
 

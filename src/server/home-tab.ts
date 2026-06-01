@@ -3,23 +3,23 @@ import { homedir } from "os"
 import { join } from "path"
 import type { App } from "@slack/bolt"
 
-const CONFIG_PATH = join(homedir(), ".collaborai", "brain.config.json")
+const CONFIG_PATH = join(homedir(), ".collaborai", "server.config.json")
 
 interface ChannelConfig { allowedSenders: string[] }
-interface BrainConfig { channels: Record<string, ChannelConfig> }
+interface ServerConfig { channels: Record<string, ChannelConfig> }
 
-function load(): BrainConfig {
+function load(): ServerConfig {
   if (!existsSync(CONFIG_PATH)) return { channels: {} }
   try { return JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) } catch { return { channels: {} } }
 }
 
-function save(config: BrainConfig) {
+function save(config: ServerConfig) {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
 }
 
-function buildHomeBlocks(config: BrainConfig): any[] {
+function buildHomeBlocks(config: ServerConfig): any[] {
   const blocks: any[] = [
-    { type: "header", text: { type: "plain_text", text: "CollaborAI — Brain Config" } },
+    { type: "header", text: { type: "plain_text", text: "CollaborAI — Server Config" } },
     { type: "section", text: { type: "mrkdwn", text: "*Channels autorisés :*" } },
   ]
 
@@ -37,7 +37,7 @@ function buildHomeBlocks(config: BrainConfig): any[] {
       text: { type: "mrkdwn", text: `<#${channelId}>  —  ${senders}` },
       accessory: {
         type: "overflow",
-        action_id: "brain_channel_overflow",
+        action_id: "server_channel_overflow",
         options: [
           { text: { type: "plain_text", text: "Gérer les utilisateurs" }, value: `manage:${channelId}` },
           { text: { type: "plain_text", text: "Supprimer le channel" }, value: `remove:${channelId}` },
@@ -52,7 +52,7 @@ function buildHomeBlocks(config: BrainConfig): any[] {
       type: "actions",
       elements: [{
         type: "button",
-        action_id: "brain_add_channel",
+        action_id: "server_add_channel",
         text: { type: "plain_text", text: "+ Ajouter un channel" },
       }],
     },
@@ -89,13 +89,13 @@ export function registerHomeHandlers(
     await publishHome(client, event.user)
   })
 
-  app.action("brain_add_channel", async ({ body, client, ack }) => {
+  app.action("server_add_channel", async ({ body, client, ack }) => {
     await ack()
     await client.views.open({
       trigger_id: (body as any).trigger_id,
       view: {
         type: "modal",
-        callback_id: "brain_add_channel_modal",
+        callback_id: "server_add_channel_modal",
         title: { type: "plain_text", text: "Ajouter un channel" },
         submit: { type: "plain_text", text: "Ajouter" },
         close: { type: "plain_text", text: "Annuler" },
@@ -114,7 +114,7 @@ export function registerHomeHandlers(
     })
   })
 
-  app.view("brain_add_channel_modal", async ({ body, view, client, ack }) => {
+  app.view("server_add_channel_modal", async ({ body, view, client, ack }) => {
     await ack()
     const channelId = view.state.values.channel_block.channel_select.selected_channel
     if (!channelId) return
@@ -125,7 +125,7 @@ export function registerHomeHandlers(
     await publishHome(client, body.user.id)
   })
 
-  app.action("brain_channel_overflow", async ({ body, action, client, ack }) => {
+  app.action("server_channel_overflow", async ({ body, action, client, ack }) => {
     await ack()
     const selected = (action as any).selected_option?.value as string
     if (!selected) return
@@ -149,7 +149,7 @@ export function registerHomeHandlers(
         trigger_id: (body as any).trigger_id,
         view: {
           type: "modal",
-          callback_id: "brain_manage_users_modal",
+          callback_id: "server_manage_users_modal",
           title: { type: "plain_text", text: "Gérer les accès" },
           submit: { type: "plain_text", text: "Sauvegarder" },
           close: { type: "plain_text", text: "Annuler" },
@@ -177,7 +177,7 @@ export function registerHomeHandlers(
     }
   })
 
-  app.view("brain_manage_users_modal", async ({ body, view, client, ack }) => {
+  app.view("server_manage_users_modal", async ({ body, view, client, ack }) => {
     await ack()
     const { channelId, userId } = JSON.parse(view.private_metadata)
     const selectedUsers = view.state.values.users_block.users_select.selected_users ?? []

@@ -2,17 +2,17 @@ import { readFileSync, writeFileSync, existsSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
 
-const CONFIG_PATH = join(homedir(), ".collaborai", "brain.config.json")
+const CONFIG_PATH = join(homedir(), ".collaborai", "server.config.json")
 
 interface ChannelConfig { allowedSenders: string[] }
-interface BrainConfig { channels: Record<string, ChannelConfig> }
+interface ServerConfig { channels: Record<string, ChannelConfig> }
 
-function load(): BrainConfig {
+function load(): ServerConfig {
   if (!existsSync(CONFIG_PATH)) return { channels: {} }
   try { return JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) } catch { return { channels: {} } }
 }
 
-function save(config: BrainConfig) {
+function save(config: ServerConfig) {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
 }
 
@@ -42,7 +42,7 @@ export function handleConfigCommand(args: string): CommandResult {
         : cfg.allowedSenders.map((u) => `<@${u}>`).join(", ")
       return `• <#${ch}>  →  ${senders}`
     })
-    return { text: `*Brain config — channels autorisés :*\n${lines.join("\n")}` }
+    return { text: `*Server config — channels autorisés :*\n${lines.join("\n")}` }
   }
 
   if (sub === "channel") {

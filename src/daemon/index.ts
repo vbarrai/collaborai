@@ -3,10 +3,10 @@ import { spawn } from "child_process"
 import { readFileSync, existsSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
-import type { BrainMessage, DaemonMessage, Project, AutoAcceptRules } from "../protocol.js"
+import type { ServerMessage, DaemonMessage, Project, AutoAcceptRules } from "../protocol.js"
 import { handleDaemonConfigCmd } from "./config-commands.js"
 
-const BRAIN_URL = process.env.BRAIN_URL ?? "ws://localhost:8080"
+const SERVER_URL = process.env.SERVER_URL ?? "ws://localhost:8080"
 const SLACK_USER_ID = process.env.SLACK_USER_ID ?? ""
 const AUTH_TOKEN = process.env.WS_AUTH_TOKEN ?? "dev-secret"
 const CONFIG_PATH = process.env.COLLABORAI_CONFIG ?? join(homedir(), ".collaborai", "daemon.config.json")
@@ -50,17 +50,17 @@ function send(ws: WebSocket, msg: DaemonMessage) {
 }
 
 function connect() {
-  const ws = new WebSocket(BRAIN_URL)
+  const ws = new WebSocket(SERVER_URL)
 
   ws.on("open", () => {
-    console.log(`[daemon] connected to brain at ${BRAIN_URL}`)
+    console.log(`[daemon] connected to server at ${SERVER_URL}`)
     send(ws, { type: "register", slackUserId: SLACK_USER_ID, token: AUTH_TOKEN })
   })
 
   ws.on("message", (raw) => {
-    let msg: BrainMessage
+    let msg: ServerMessage
     try {
-      msg = JSON.parse(raw.toString()) as BrainMessage
+      msg = JSON.parse(raw.toString()) as ServerMessage
     } catch {
       return
     }

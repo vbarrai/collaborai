@@ -11,10 +11,10 @@ import { registerHomeHandlers } from "./home-tab.js"
 import { openDaemonModal, registerDaemonModalHandlers } from "./daemon-modal.js"
 import type { Project, AutoAcceptRules } from "../protocol.js"
 
-const CONFIG_PATH = process.env.BRAIN_CONFIG ?? join(homedir(), ".collaborai", "brain.config.json")
+const CONFIG_PATH = process.env.SERVER_CONFIG ?? join(homedir(), ".collaborai", "server.config.json")
 interface ChannelConfig { allowedSenders: string[] }
-interface BrainConfig { channels: Record<string, ChannelConfig> }
-const brainConfig: BrainConfig = existsSync(CONFIG_PATH)
+interface ServerConfig { channels: Record<string, ChannelConfig> }
+const serverConfig: ServerConfig = existsSync(CONFIG_PATH)
   ? JSON.parse(readFileSync(CONFIG_PATH, "utf-8"))
   : { channels: {} }
 
@@ -63,19 +63,19 @@ async function updateMessage(channel: string, ts: string, text: string): Promise
 
 startWsServer(Number(process.env.WS_PORT ?? 8080), postMessage, updateMessage)
 
-const onBrainConfigChange = () => {
+const onServerConfigChange = () => {
   if (existsSync(CONFIG_PATH)) {
-    Object.assign(brainConfig, JSON.parse(readFileSync(CONFIG_PATH, "utf-8")))
+    Object.assign(serverConfig, JSON.parse(readFileSync(CONFIG_PATH, "utf-8")))
   }
 }
 
-registerHomeHandlers(app, onBrainConfigChange, (triggerId, userId, client) =>
+registerHomeHandlers(app, onServerConfigChange, (triggerId, userId, client) =>
   openDaemonModal(client, triggerId, userId, requestProjects)
 )
 
 registerDaemonModalHandlers(app, requestProjects, sendDaemonConfigCmd)
 
-const allowedChannels = Object.keys(brainConfig.channels)
+const allowedChannels = Object.keys(serverConfig.channels)
 
 initStatus(
   allowedChannels,
@@ -160,15 +160,15 @@ async function handleMention(text: string, channel: string, ts: string, requeste
         await postMessage(channel, `:x: Impossible de joindre le daemon de <@${daemonTarget}> : ${(e as Error).message}`, ts)
       }
     } else {
-      // Brain config: "@collaborai config show / channel add ..."
+      // Server config: "@collaborai config show / channel add ..."
       const { text: reply } = handleConfigCommand(rest)
-      Object.assign(brainConfig, existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) : { channels: {} })
+      Object.assign(serverConfig, existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf-8")) : { channels: {} })
       await postMessage(channel, reply, ts)
     }
     return
   }
 
-  const channelConfig = brainConfig.channels[channel]
+  const channelConfig = serverConfig.channels[channel]
   if (!channelConfig) return
   if (channelConfig.allowedSenders.length > 0 && !channelConfig.allowedSenders.includes(requesterId)) return
 
@@ -314,5 +314,5 @@ app.action("deny_task", async ({ action, body, ack, client }) => {
 })
 
 await app.start()
-console.log("[brain] running — waiting for daemons and Slack events")
+console.log("[server] running — waiting for daemons and Slack events")
 await refreshStatus()

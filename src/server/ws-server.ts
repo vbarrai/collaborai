@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws"
 import { register, unregister, getByUserId } from "./registry.js"
-import type { DaemonMessage, BrainMessage, Project, AutoAcceptRules } from "../protocol.js"
+import type { DaemonMessage, ServerMessage, Project, AutoAcceptRules } from "../protocol.js"
 
 const AUTH_TOKEN = process.env.WS_AUTH_TOKEN ?? "dev-secret"
 
@@ -119,7 +119,7 @@ export function requestProjects(slackUserId: string, requestId: string): Promise
       resolve(res)
     })
 
-    const msg: BrainMessage = { type: "list_projects", requestId }
+    const msg: ServerMessage = { type: "list_projects", requestId }
     entry.ws.send(JSON.stringify(msg))
   })
 }
@@ -144,7 +144,7 @@ export async function dispatchTask(
   const placeholderTs = await postMessage(channel, "_Claude Code en cours..._", threadTs)
   streamingMessages.set(taskId, { channel, ts: placeholderTs, buffer: "" })
 
-  const task: BrainMessage = { type: "task", taskId, prompt, workingDir, channel, ts: threadTs, requesterId }
+  const task: ServerMessage = { type: "task", taskId, prompt, workingDir, channel, ts: threadTs, requesterId }
   entry.ws.send(JSON.stringify(task))
 }
 
@@ -163,7 +163,7 @@ export function sendDaemonConfigCmd(slackUserId: string, requestId: string, args
       resolve(text)
     })
 
-    const msg: BrainMessage = { type: "config_cmd", requestId, args }
+    const msg: ServerMessage = { type: "config_cmd", requestId, args }
     entry.ws.send(JSON.stringify(msg))
   })
 }

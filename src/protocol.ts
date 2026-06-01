@@ -7,14 +7,14 @@ export interface AutoAcceptRules {
   channels: Record<string, { users: string[] }>
 }
 
-// Brain → Daemon
-export type BrainMessage =
+// Server → Daemon
+export type ServerMessage =
   | { type: "task"; taskId: string; prompt: string; workingDir: string; channel: string; ts: string; requesterId: string }
   | { type: "list_projects"; requestId: string }
   | { type: "config_cmd"; requestId: string; args: string[] }
   | { type: "ping" }
 
-// Daemon → Brain
+// Daemon → Server
 export type DaemonMessage =
   | { type: "register"; slackUserId: string; token: string }
   | { type: "projects"; requestId: string; projects: Project[]; autoAccept: AutoAcceptRules }

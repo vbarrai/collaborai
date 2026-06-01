@@ -11,19 +11,19 @@ into the Slack thread.
 
 The system has two processes that talk over a single WebSocket connection:
 
-- **Brain** (`src/brain/`) — one central process. Connects to Slack via Socket Mode (`@slack/bolt`),
+- **Server** (`src/server/`) — one central process. Connects to Slack via Socket Mode (`@slack/bolt`),
   runs the WebSocket *server*, and orchestrates the request → confirmation → dispatch → stream flow.
-- **Daemon** (`src/daemon/`) — one per developer, runs on their own machine. Connects to the Brain as a
+- **Daemon** (`src/daemon/`) — one per developer, runs on their own machine. Connects to the Server as a
   WebSocket *client*, advertises its local projects, and spawns the `claude` CLI to execute tasks.
 
-The wire protocol between them is the single source of truth in `src/protocol.ts` (`BrainMessage` /
+The wire protocol between them is the single source of truth in `src/protocol.ts` (`ServerMessage` /
 `DaemonMessage` discriminated unions). Change message shapes there first; both sides import it.
 
 ## Commands
 
 ```bash
-npm run brain      # start the Brain (Slack + WebSocket server). Needs SLACK_*, WS_PORT, WS_AUTH_TOKEN
-npm run daemon     # start a Daemon (connects to Brain). Needs BRAIN_URL, SLACK_USER_ID, WS_AUTH_TOKEN
+npm run server     # start the Server (Slack + WebSocket server). Needs SLACK_*, WS_PORT, WS_AUTH_TOKEN
+npm run daemon     # start a Daemon (connects to Server). Needs SERVER_URL, SLACK_USER_ID, WS_AUTH_TOKEN
 ```
 
 Both scripts run TypeScript directly via `tsx` and load env vars with `node --env-file=.env`. There is
@@ -35,14 +35,14 @@ on `PATH` (it is invoked with `--dangerously-skip-permissions`).
 
 ## Architecture
 
-### Task flow (Brain side, `index.ts` + `ws-server.ts`)
+### Task flow (Server side, `index.ts` + `ws-server.ts`)
 
 1. **Trigger** — `app.event("app_mention")` / `app.message` → `handleMention()`. The channel must exist
-   in `brain.config.json`, and if that channel lists `allowedSenders`, the requester must be one of them.
-2. **Resolve projects** — for each mentioned, *daemon-connected* user, the Brain sends `list_projects`
+   in `server.config.json`, and if that channel lists `allowedSenders`, the requester must be one of them.
+2. **Resolve projects** — for each mentioned, *daemon-connected* user, the Server sends `list_projects`
    over WebSocket and awaits a `projects` reply (`requestProjects`, 5s timeout via a pending-promise map
    keyed by `requestId`).
-3. **Pick a project** — if the prompt text contains a project name it auto-selects; otherwise the Brain
+3. **Pick a project** — if the prompt text contains a project name it auto-selects; otherwise the Server
    posts a `static_select` + "Lancer" button (`pendingTasks` map).
 4. **Confirm** — `resolveProject()` either auto-dispatches (if `shouldAutoAccept` matches the daemon's
    per-channel rules) or posts Accept/Deny buttons (`pendingConfirmations` map).
@@ -62,7 +62,7 @@ on close. On a `task` message, `runClaudeCode()` spawns `claude -p <prompt> --ou
 --verbose --dangerously-skip-permissions` in the project's `cwd`, parses each JSON line, and forwards
 `assistant` text blocks and the final `result` as `stream` chunks. Exit code 0 → `done`, else `error`.
 
-### Connection registry (`brain/registry.ts`)
+### Connection registry (`server/registry.ts`)
 
 In-memory `Map<slackUserId, { ws, connectedAt }>`. This is the authority on which developers are
 currently online. `onRegistryChange` listeners drive the pinned "who's online" status message
@@ -70,7 +70,7 @@ currently online. `onRegistryChange` listeners drive the pinned "who's online" s
 
 ### Slack Home tab & modals (`home-tab.ts`, `daemon-modal.ts`)
 
-The App Home tab (`app_home_opened`) renders Brain config (allowed channels/senders). The "Config
+The App Home tab (`app_home_opened`) renders Server config (allowed channels/senders). The "Config
 daemon" button opens a modal that proxies to the target daemon via `config_cmd` round-trips, so a user
 edits their *remote* daemon's project list and auto-accept rules from Slack. Modals stack with
 `views.push` and refresh the parent view through the `parentViewId` carried in `private_metadata`.
@@ -79,15 +79,15 @@ edits their *remote* daemon's project list and auto-accept rules from Slack. Mod
 
 All persistent state lives as JSON under `~/.collaborai/` (gitignored, never committed):
 
-- `brain.config.json` (Brain) — `{ channels: { [channelId]: { allowedSenders: string[] } } }`.
+- `server.config.json` (Server) — `{ channels: { [channelId]: { allowedSenders: string[] } } }`.
   Empty `allowedSenders` means everyone in that channel is allowed.
 - `daemon.config.json` (Daemon) — `{ projects: Project[], autoAccept: { channels: {...} } }`.
   In `autoAccept`, a `users` list containing `"*"` means auto-accept from anyone.
-- `status-messages.json` (Brain) — maps channel → the pinned status message `ts` so it can be updated.
+- `status-messages.json` (Server) — maps channel → the pinned status message `ts` so it can be updated.
 
 Config can be edited three ways, all converging on the same JSON: Slack slash-style commands
-(`@collaborai config ...`, parsed in `brain/config-commands.ts` and `daemon/config-commands.ts`), the
-Home tab, and the daemon modal. `index.ts` decides whether a `config` command targets the Brain or a
+(`@collaborai config ...`, parsed in `server/config-commands.ts` and `daemon/config-commands.ts`), the
+Home tab, and the daemon modal. `index.ts` decides whether a `config` command targets the Server or a
 daemon by checking whether a mentioned user is in the connection registry. When you add a config
 option, update the command parser, the relevant Home/modal blocks, and the loader that reads it.
 

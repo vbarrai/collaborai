@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "server": "node --env-file=.env --import tsx src/server/index.ts",
-    "daemon": "node --env-file=.env --import tsx src/daemon/index.ts"
+    "daemon": "node --env-file=.env --import tsx src/daemon/index.ts",
+    "daemon:install": "node --import tsx src/daemon/install.ts",
+    "daemon:uninstall": "node --import tsx src/daemon/install.ts --uninstall",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@slack/bolt": "^4.4.0",

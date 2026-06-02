@@ -22,9 +22,18 @@ The wire protocol between them is the single source of truth in `src/protocol.ts
 ## Commands
 
 ```bash
-npm run server     # start the Server (Slack + WebSocket server). Needs SLACK_*, WS_PORT, WS_AUTH_TOKEN
-npm run daemon     # start a Daemon (connects to Server). Needs SERVER_URL, SLACK_USER_ID, WS_AUTH_TOKEN
+npm run server            # start the Brain (Slack + WebSocket server). Needs SLACK_*, WS_PORT, WS_AUTH_TOKEN
+npm run daemon           # start a Daemon (connects to Brain). Needs BRAIN_URL, SLACK_USER_ID, WS_AUTH_TOKEN
+npm run daemon:install   # (macOS) install the Daemon as a launchd LaunchAgent so it starts at login
+npm run daemon:uninstall # (macOS) stop and remove the LaunchAgent
 ```
+
+`daemon:install` (`src/daemon/install.ts`) writes a LaunchAgent plist to
+`~/Library/LaunchAgents/com.collaborai.daemon.plist` and `launchctl load`s it. The plist runs the same
+`node --env-file=.env --import tsx src/daemon/index.ts` command with absolute paths, sets
+`RunAtLoad`/`KeepAlive` (start at login, restart on crash), bakes the install-time `PATH` in (so the
+daemon still finds the `claude` CLI under launchd's minimal environment), and logs to
+`~/.collaborai/daemon.log`. macOS-only for now.
 
 Both scripts run TypeScript directly via `tsx` and load env vars with `node --env-file=.env`. There is
 no build step for running, no test suite, and no linter configured. `tsconfig.json` targets ESNext

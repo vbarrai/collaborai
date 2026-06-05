@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "server": "node --env-file=.env --import tsx src/server/index.ts",
-    "daemon": "node --env-file=.env --import tsx src/daemon/index.ts",
-    "daemon:install": "node --import tsx src/daemon/install.ts",
-    "daemon:uninstall": "node --import tsx src/daemon/install.ts --uninstall",
+    "server": "node --env-file-if-exists=.env --import tsx src/server/index.ts",
+    "server:slack": "node --env-file-if-exists=.env --import tsx src/server/index.ts --slack",
+    "daemon": "node --env-file-if-exists=.env --import tsx src/daemon/index.ts",
+    "client": "node --env-file-if-exists=.env --import tsx src/client/index.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {

@@ -1,22 +1,19 @@
 import { WebSocket } from "ws"
 import { spawn } from "child_process"
 import { readFileSync, existsSync } from "fs"
-import { homedir } from "os"
+import { homedir, hostname } from "os"
 import { join } from "path"
+import { createInterface } from "readline"
 import type { ServerMessage, DaemonMessage, Project, AutoAcceptRules } from "../protocol.js"
 import { handleDaemonConfigCmd } from "./config-commands.js"
+import { shouldAutoAcceptRequester } from "./auto-accept.js"
 
 const SERVER_URL = process.env.SERVER_URL ?? "ws://localhost:8080"
-const SLACK_USER_ID = process.env.SLACK_USER_ID ?? ""
 const AUTH_TOKEN = process.env.WS_AUTH_TOKEN ?? "dev-secret"
 const CONFIG_PATH = process.env.COLLABORAI_CONFIG ?? join(homedir(), ".collaborai", "daemon.config.json")
 
-if (!SLACK_USER_ID) {
-  console.error("SLACK_USER_ID is required")
-  process.exit(1)
-}
-
 interface DaemonConfig {
+  daemonId?: string
   projects: Project[]
   autoAccept: AutoAcceptRules
 }
@@ -34,6 +31,7 @@ function loadConfig(): DaemonConfig {
     const raw = readFileSync(CONFIG_PATH, "utf-8")
     const config = JSON.parse(raw) as Partial<DaemonConfig>
     const result: DaemonConfig = {
+      daemonId: config.daemonId,
       projects: config.projects ?? [],
       autoAccept: config.autoAccept ?? { channels: {} },
     }
@@ -45,16 +43,63 @@ function loadConfig(): DaemonConfig {
   }
 }
 
+// Identity precedence: config file → DAEMON_ID/SLACK_USER_ID env → hostname.
+function resolveDaemonId(config: DaemonConfig): string {
+  return (
+    config.daemonId ||
+    process.env.DAEMON_ID ||
+    process.env.SLACK_USER_ID ||
+    hostname()
+  )
+}
+
+const DAEMON_ID = resolveDaemonId(loadConfig())
+
 function send(ws: WebSocket, msg: DaemonMessage) {
   ws.send(JSON.stringify(msg))
+}
+
+function askYesNo(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  return new Promise((resolve) =>
+    rl.question(question, (answer) => {
+      rl.close()
+      resolve(/^(o|y|oui|yes)$/i.test(answer.trim()))
+    })
+  )
+}
+
+async function handleConfirm(ws: WebSocket, msg: Extract<ServerMessage, { type: "confirm_request" }>) {
+  const { autoAccept } = loadConfig()
+
+  if (shouldAutoAcceptRequester(autoAccept, msg.requesterId)) {
+    console.log(`[daemon] auto-accepted task ${msg.taskId} from ${msg.requesterId}`)
+    send(ws, { type: "confirm_response", taskId: msg.taskId, accepted: true })
+    return
+  }
+
+  if (!process.stdin.isTTY) {
+    console.warn(`[daemon] no TTY available, refusing task ${msg.taskId} from ${msg.requesterId}`)
+    send(ws, { type: "confirm_response", taskId: msg.taskId, accepted: false })
+    return
+  }
+
+  console.log("\n──────────────────────────────────────────")
+  console.log(`Nouvelle demande de : ${msg.requesterId}`)
+  console.log(`Projet : ${msg.workingDir}`)
+  console.log(`Prompt : ${msg.prompt}`)
+  console.log("──────────────────────────────────────────")
+  const accepted = await askYesNo("Accepter ? [o/N] ")
+  console.log(accepted ? "→ accepté" : "→ refusé")
+  send(ws, { type: "confirm_response", taskId: msg.taskId, accepted })
 }
 
 function connect() {
   const ws = new WebSocket(SERVER_URL)
 
   ws.on("open", () => {
-    console.log(`[daemon] connected to server at ${SERVER_URL}`)
-    send(ws, { type: "register", slackUserId: SLACK_USER_ID, token: AUTH_TOKEN })
+    console.log(`[daemon] connected to server at ${SERVER_URL} as "${DAEMON_ID}"`)
+    send(ws, { type: "register", role: "daemon", daemonId: DAEMON_ID, token: AUTH_TOKEN })
   })
 
   ws.on("message", (raw) => {
@@ -79,6 +124,11 @@ function connect() {
     if (msg.type === "config_cmd") {
       const text = handleDaemonConfigCmd(msg.args)
       send(ws, { type: "config_response", requestId: msg.requestId, text })
+      return
+    }
+
+    if (msg.type === "confirm_request") {
+      handleConfirm(ws, msg)
       return
     }
 

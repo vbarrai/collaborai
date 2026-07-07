@@ -1,0 +1,18 @@
+services:
+  server:
+    build: .
+    # Add `--slack` here to run the Slack front-end instead of no-Slack mode.
+    # command: ["node", "dist/server/index.js", "--slack"]
+    ports:
+      - "${WS_PORT:-8080}:8080"
+    environment:
+      WS_PORT: "8080"
+      # These override ~/.collaborai/secrets.json if set. Leave unset to rely on
+      # the mounted secrets file under ./data.
+      WS_AUTH_TOKEN: "${WS_AUTH_TOKEN:-}"
+      SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN:-}"
+      SLACK_APP_TOKEN: "${SLACK_APP_TOKEN:-}"
+    volumes:
+      # Persists server.config.json, status-messages.json and secrets.json.
+      - ./data:/data
+    restart: unless-stopped
